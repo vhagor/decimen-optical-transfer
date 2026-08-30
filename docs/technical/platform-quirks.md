@@ -4,7 +4,8 @@ The hard-won details baked into the code, so nobody has to rediscover them.
 
 ## Camera
 
-- **iOS lies about frame rate.** `frameRate: {ideal: 60}` silently delivers 30; demand `{exact: 60}` (works at 1280-wide) and fall back to `ideal`. Always read back `getSettings()`.
+- **iOS lies about frame rate.** `frameRate: {ideal: 60}` silently delivers 30; demand `{exact: 60}` on a 16:9 video mode first (720p60), then the historical 4:3 1280-wide path, then drop width before accepting `ideal`. A camera that *accepts* `exact: 60` and still delivers 30 is not a success — keep walking. Always read back `getSettings()`.
+- **4:3 still-preview modes often cap at 30 fps.** The receiver asks for 16:9 height (`width × 9/16`) before the old 4:3 ideal. That is why the default 1280-wide capture is trying to be 1280×720, not 1280×960.
 - **iOS may refuse a live `applyConstraints`.** The receiver keeps the running stream and says so rather than tearing down a transfer.
 - **Capabilities are probed, not UA-sniffed** (`shared/platform.ts`). Android Chrome exposes `torch`, `focusMode`, `frameRate.max` via `getCapabilities()`; iOS exposes none of them. Continuous autofocus is applied when available; unreachable fps options are disabled. `torch` is reported but deliberately unused — the sender is an emissive screen, a flashlight only adds glare.
 - **`requestVideoFrameCallback` chains outlive their stream** and resume on the next one; a generation counter prevents zombie capture loops.

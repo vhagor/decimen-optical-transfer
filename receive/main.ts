@@ -2,7 +2,8 @@
 //
 // Field lessons baked in:
 // - iOS treats `frameRate: {ideal: 60}` as a suggestion and delivers 30.
-//   Demand `exact` first (it works at 1280-wide), fall back to `ideal`.
+//   Demand `exact` first on a 16:9 video mode (720p60), then the historical
+//   4:3 1280-wide path, then drop width before accepting `ideal` (30).
 // - requestVideoFrameCallback chains survive a stopped stream and resume on
 //   the next one — a generation counter prevents zombie capture loops.
 // - Progress must track frames COLLECTED: LT peeling back-loads its solve
@@ -47,7 +48,14 @@ import {
 import { NO_SIGNAL_HINT_FRAME_BYTES, NO_SIGNAL_HINT_TX_FPS } from "../shared/send-settings";
 import { statusLine } from "../shared/status-line";
 import { requestScreenWakeLock } from "../shared/wake-lock";
-import { applyAdvancedConstraint, probeCameraCapabilities } from "../shared/platform";
+import {
+  applyAdvancedConstraint,
+  cameraAcquireAttempts,
+  cameraMetRequestedFps,
+  captureHeight,
+  probeCameraCapabilities,
+  type CameraAcquireAttempt,
+} from "../shared/platform";
 import { closeOnBackdropClick } from "../shared/dialog";
 import { supportLink } from "./support";
 
@@ -468,28 +476,60 @@ function cameraSelection(): MediaTrackConstraints {
     : { facingMode: "environment" };
 }
 
-/** getUserMedia with the shared width/fps settings applied. Frame rate is
- *  demanded exactly first — iOS hands back 30 fps after accepting a polite
- *  request for 60 — and the ideal retry takes what the camera can give. */
+function trackFps(media: MediaStream): number {
+  return media.getVideoTracks()[0]?.getSettings().frameRate ?? 0;
+}
+
+function stopTracks(media: MediaStream) {
+  for (const track of media.getTracks()) track.stop();
+}
+
+async function openCamera(
+  selection: MediaTrackConstraints,
+  attempt: CameraAcquireAttempt,
+  fps: number,
+): Promise<MediaStream> {
+  return navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: {
+      ...selection,
+      width: { ideal: attempt.width },
+      height: { ideal: attempt.height },
+      frameRate: attempt.fpsMode === "exact" ? { exact: fps } : { ideal: fps },
+    },
+  });
+}
+
+/** Walk the 16:9 / exact-fps ladder. A camera that accepts `exact: 60` and
+ *  still delivers 30 is not a success — keep walking, and only keep the
+ *  fastest stream we actually got. */
 async function acquireCamera(selection: MediaTrackConstraints): Promise<MediaStream> {
-  const captureWidth = Number(cfgWidth.value);
-  const captureFps = Number(cfgCapFps.value);
-  const base: MediaTrackConstraints = {
-    ...selection,
-    width: { ideal: captureWidth },
-    height: { ideal: Math.round((captureWidth * 3) / 4) },
-  };
-  try {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: { ...base, frameRate: { exact: captureFps } },
-    });
-  } catch {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: { ...base, frameRate: { ideal: captureFps } },
-    });
+  const wantFps = Number(cfgCapFps.value);
+  let fallback: MediaStream | null = null;
+  let lastError: unknown;
+  for (const attempt of cameraAcquireAttempts(Number(cfgWidth.value), wantFps)) {
+    let media: MediaStream;
+    try {
+      media = await openCamera(selection, attempt, wantFps);
+    } catch (err) {
+      lastError = err;
+      continue;
+    }
+    if (cameraMetRequestedFps(trackFps(media), wantFps)) {
+      if (fallback) stopTracks(fallback);
+      return media;
+    }
+    if (!fallback || trackFps(media) > trackFps(fallback)) {
+      if (fallback) stopTracks(fallback);
+      fallback = media;
+    } else {
+      stopTracks(media);
+    }
   }
+  if (fallback) return fallback;
+  throw lastError instanceof Error
+    ? lastError
+    : new DOMException("Could not open a camera", "NotFoundError");
 }
 
 /**
@@ -678,12 +718,23 @@ async function applyReceiveSettings() {
   const track = stream?.getVideoTracks()[0];
   if (!track) return;
   const width = Number(cfgWidth.value);
-  try {
-    await track.applyConstraints({
+  const fps = Number(cfgCapFps.value);
+  const apply = (height: number, frameRate: ConstrainDouble) =>
+    track.applyConstraints({
       width: { ideal: width },
-      height: { ideal: Math.round((width * 3) / 4) },
-      frameRate: { ideal: Number(cfgCapFps.value) },
+      height: { ideal: height },
+      frameRate,
     });
+  try {
+    try {
+      await apply(captureHeight(width, "16:9"), { exact: fps });
+    } catch {
+      try {
+        await apply(captureHeight(width, "4:3"), { exact: fps });
+      } catch {
+        await apply(captureHeight(width, "16:9"), { ideal: fps });
+      }
+    }
   } catch {
     // Some devices (notably iOS) refuse a live reconfigure. Keep the stream we
     // have rather than tearing down a transfer in progress.
@@ -691,6 +742,7 @@ async function applyReceiveSettings() {
     return;
   }
   reportCameraSettings();
+  void applyCameraExtras();
 }
 
 type VideoRVFC = HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };

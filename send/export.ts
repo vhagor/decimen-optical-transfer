@@ -115,7 +115,7 @@ const ZIP_FRAME_OVERHEAD = 175;
 const SAMPLE_SESSION_ID = 1;
 
 // One-slot memo for the sampled frame size. The payload is held through a
-// WeakRef so a 64 MB pick does not stay pinned after the user drops it.
+// WeakRef so a 128 MB pick does not stay pinned after the user drops it.
 let sampleCache: {
   payload: WeakRef<Uint8Array>;
   frameBytes: number;

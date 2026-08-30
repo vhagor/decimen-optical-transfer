@@ -3,7 +3,7 @@
 // The frame header numbers source blocks in a u16, so a large payload at a
 // small bytes-per-frame runs out of block numbers long before it runs out of
 // the file size limit: at 500 bytes per frame the real ceiling is about 30 MB,
-// not 64. The sender has to catch that before it starts streaming, and tell
+// not 128. The sender has to catch that before it starts streaming, and tell
 // you which setting fixes it.
 
 import { HEADER_LEN } from "./protocol";
@@ -35,7 +35,7 @@ export function minimumFrameBytes(payloadBytes: number): number {
  * is actually in the dropdown instead of the bare arithmetic minimum.
  *
  * Undefined when no option is large enough — unreachable while MAX_FILE_BYTES
- * holds, since the largest legal payload needs about 1045 bytes per frame, but
+ * holds, since the largest legal payload needs about 2070 bytes per frame, but
  * the caller should not have to know that.
  */
 export function smallestSufficientFrameSize(

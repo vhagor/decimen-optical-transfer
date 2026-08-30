@@ -24,6 +24,6 @@ Camera settings apply live while the camera runs; a device that refuses a live r
 |---|---|---|
 | camera | auto | the device list fills in once the camera starts (browsers hide camera names until permission is granted); pick a specific one when auto grabs the wrong lens — front, or a telephoto — and the stream switches over live |
 | capture width | 1280 | 1920 costs decode time; 960 helps weak CPUs |
-| capture fps | 60 | iOS delivers 30 unless the exact rate is demanded — the app handles this |
+| capture fps | 60 | the receiver asks for a 16:9 video mode at the exact rate first (720p60), then drops width before accepting 30; iOS still lies about `ideal: 60` |
 | decode workers | device max | one WASM decoder per worker; busy workers drop frames, which the fountain absorbs |
 | show received files automatically | on | the only setting that persists between sessions, and the only one read when a transfer *lands* rather than when the camera starts |

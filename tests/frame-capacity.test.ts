@@ -33,9 +33,12 @@ test("block count rounds up, because a partial block still needs a frame", () =>
 
 test("the block ceiling bites well below the file size limit", () => {
   // This is the whole reason the check exists: at the smallest offered frame
-  // size you run out of block numbers around 30 MB, not 64.
+  // size you run out of block numbers around 30 MB, not 128. A full-size pick
+  // also misses the 1850 setting — 2331 is the first dropdown value that fits.
   assert.equal(fitsInOneStream(30 * 1024 * 1024, 500), false);
   assert.equal(fitsInOneStream(20 * 1024 * 1024, 500), true);
+  assert.equal(fitsInOneStream(MAX_FILE_BYTES, 1850), false);
+  assert.equal(fitsInOneStream(MAX_FILE_BYTES, 2331), true);
   assert.equal(fitsInOneStream(MAX_FILE_BYTES, 2953), true);
 });
 

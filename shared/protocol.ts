@@ -113,7 +113,7 @@ export const FLAG_ENCRYPTED = 0x01;
  * Critical flag bits this build can actually honour — currently none.
  */
 const SUPPORTED_FLAGS = 0x00;
-export const MAX_FILE_BYTES = 64 * 1024 * 1024;
+export const MAX_FILE_BYTES = 128 * 1024 * 1024;
 /**
  * One place for the number, so the picker label, the rejection message and
  * packFile()'s own error can't drift apart. The HTML pulls it in as the
@@ -237,7 +237,7 @@ const COMPRESSIBLE_AUDIO = /^audio\/(wav|x-wav|wave|vnd\.wave|aiff|x-aiff|basic|
  * Would gzip be a waste of time on this?
  *
  * Trying costs a full-size allocation and a pass over every byte to discover
- * the answer. On a 64 MB pick that is one of the five simultaneous copies the
+ * the answer. On a 128 MB pick that is one of the five simultaneous copies the
  * sender holds, and JPEGs, MP4s and zips — the files people actually send —
  * never win the trade.
  *

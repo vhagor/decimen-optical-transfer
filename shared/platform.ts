@@ -63,3 +63,53 @@ export async function applyAdvancedConstraint(
     return false;
   }
 }
+
+export type CameraAspect = "16:9" | "4:3";
+export type CameraFpsMode = "exact" | "ideal";
+
+export interface CameraAcquireAttempt {
+  width: number;
+  height: number;
+  fpsMode: CameraFpsMode;
+}
+
+/** Phone 60 fps modes are video-shaped. 4:3 still-preview often locks 30. */
+export function captureHeight(width: number, aspect: CameraAspect): number {
+  return aspect === "16:9"
+    ? Math.round((width * 9) / 16)
+    : Math.round((width * 3) / 4);
+}
+
+/**
+ * getUserMedia attempts in preference order: lock the requested fps on a
+ * 16:9 video mode first, then the historical 4:3 path, then drop width
+ * before accepting a slower stream.
+ */
+export function cameraAcquireAttempts(
+  wantWidth: number,
+  wantFps: number,
+): CameraAcquireAttempt[] {
+  const seen = new Set<string>();
+  const attempts: CameraAcquireAttempt[] = [];
+  const add = (width: number, aspect: CameraAspect, fpsMode: CameraFpsMode) => {
+    const height = captureHeight(width, aspect);
+    const key = `${width}x${height}:${fpsMode}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    attempts.push({ width, height, fpsMode });
+  };
+  add(wantWidth, "16:9", "exact");
+  add(wantWidth, "4:3", "exact");
+  if (wantFps >= 60) {
+    if (wantWidth > 1280) add(1280, "16:9", "exact");
+    if (wantWidth > 960) add(960, "16:9", "exact");
+  }
+  add(wantWidth, "16:9", "ideal");
+  add(wantWidth, "4:3", "ideal");
+  return attempts;
+}
+
+/** NTSC 59.94 still counts as a 60 request. */
+export function cameraMetRequestedFps(got: number | undefined, want: number): boolean {
+  return (got ?? 0) + 0.5 >= want;
+}

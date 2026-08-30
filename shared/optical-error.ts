@@ -14,7 +14,7 @@ export type ErrorMessages = Messages["errors"];
 export type OpticalErrorCode = keyof ErrorMessages;
 
 export interface OpticalErrorParams {
-  /** Human label of the limit that was exceeded ("64 MB", "4 MB"). */
+  /** Human label of the limit that was exceeded ("128 MB", "4 MB"). */
   limit?: string;
 }
 
